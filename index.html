@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hosted Weather Dashboard</title>
+<style>
+:root{--bg:#f3f4f6;--card:#fff;--line:#d1d5db;--text:#111827;--muted:#6b7280}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:1900px;margin:0 auto;padding:8px}
+.topbar,.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:6px 8px;background:var(--card);border:1px solid var(--line);border-radius:8px}
+button,select,input{padding:6px 8px;border-radius:6px;border:1px solid #9ca3af;background:#fff;font-size:13px}
+button{cursor:pointer}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab-btn.active{background:#e5e7eb}
+.view{display:none}
+.view.active{display:block}
+.grid-2,.grid-4{display:grid;gap:8px}
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid-4{grid-template-columns:repeat(2,minmax(0,1fr));height:calc(100vh - 150px)}
+.panel{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.panel-head{padding:4px 6px;font-size:12px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center}
+.panel-head a{color:#2563eb;text-decoration:none}
+.frame-wrap,.frame{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fff}
+.frame{height:calc(100vh - 145px)}
+img{width:100%;height:100%;display:block;object-fit:contain}
+.tuned-scale{transform:scale(var(--sat-scale,0.96))}
+.info{font-size:13px;color:#374151}
+.notice{font-size:12px;color:var(--muted)}
+.bad{display:flex;align-items:center;justify-content:center;height:100%;padding:16px;text-align:center;color:var(--muted)}
+@media (max-width:1000px){.grid-2,.grid-4{grid-template-columns:1fr}.grid-4{height:auto}.frame{height:50vh}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="tabs">
+      <button class="tab-btn active" data-view="sat">Satellite</button>
+      <button class="tab-btn" data-view="radarir">Radar + IR</button>
+      <button class="tab-btn" data-view="ecmwf">ECMWF Dashboard</button>
+      <button class="tab-btn" data-view="compare">ECMWF Compare</button>
+      <button class="tab-btn" data-view="dini">DINI Hourly</button>
+    </div>
+  </div>
+
+  <section id="sat" class="view active">
+    <div class="toolbar">
+      <span class="info"><strong>Auto-refresh:</strong> 15 min</span>
+      <span id="satStatus" class="info">Loading...</span>
+      <label>Scale</label>
+      <input id="satScale" type="range" min="0.90" max="1.00" step="0.01" value="0.96">
+      <span id="satScaleVal" class="info">0.96</span>
+    </div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-head"><span>Infrared (IR) - UK</span><a href="https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif" target="_blank">↗</a></div>
+        <div class="frame"><img id="satIR" class="tuned-scale"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>Water Vapour (WV) - UK</span><a href="https://modeles20.meteociel.fr/satellite/animsatwvmtguk.gif" target="_blank">↗</a></div>
+        <div class="frame"><img id="satWV" class="tuned-scale"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="radarir" class="view">
+    <div class="toolbar">
+      <span class="info"><strong>Auto-refresh:</strong> 15 min</span>
+      <span id="radarStatus" class="info">Loading...</span>
+      <label>Scale</label>
+      <input id="radarScale" type="range" min="0.90" max="1.00" step="0.01" value="0.96">
+      <span id="radarScaleVal" class="info">0.96</span>
+    </div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-head"><span>UK Radar</span><a href="https://www.meteociel.com/cartes_obs/radar/lastradar_uk.gif" target="_blank">↗</a></div>
+        <div class="frame"><img id="radarImg" class="tuned-scale"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><span>Infrared (IR) - UK</span><a href="https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif" target="_blank">↗</a></div>
+        <div class="frame"><img id="radarIR" class="tuned-scale"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ecmwf" class="view">
+    <div class="toolbar">
+      <input id="ecDate" type="date">
+      <select id="ecRun"><option value="00">00Z</option><option value="12">12Z</option></select>
+      <button onclick="ecStep(-12)">-12h</button>
+      <button onclick="ecStep(-6)">-6h</button>
+      <select id="ecHour"></select>
+      <button onclick="ecStep(6)">+6h</button>
+      <button onclick="ecStep(12)">+12h</button>
+      <button onclick="renderECMWF()">Load</button>
+      <button onclick="toggleECLoop()" id="ecLoopBtn">▶ Loop</button>
+      <span class="info" id="ecInfo"></span>
+    </div>
+    <div class="grid-4" id="ecGrid"></div>
+  </section>
+
+  <section id="compare" class="view">
+    <div class="toolbar">
+      <input id="cmpDate" type="date">
+      <select id="cmpRun"><option value="00">00Z</option><option value="12">12Z</option></select>
+      <button onclick="cmpStep(-12)">-12h</button>
+      <button onclick="cmpStep(-6)">-6h</button>
+      <select id="cmpHour"></select>
+      <button onclick="cmpStep(6)">+6h</button>
+      <button onclick="cmpStep(12)">+12h</button>
+      <button onclick="renderCompare()">Load</button>
+      <span class="info" id="cmpInfo"></span>
+    </div>
+    <div class="grid-4" id="cmpGrid"></div>
+    <div class="notice">Same-valid-time comparison. Earlier runs automatically use the forecast hour needed to verify at the same target time.</div>
+  </section>
+
+  <section id="dini" class="view">
+    <div class="toolbar">
+      <input id="diniDate" type="date">
+      <select id="diniRun">
+        <option value="00">00Z</option><option value="03">03Z</option><option value="06">06Z</option><option value="09">09Z</option>
+        <option value="12">12Z</option><option value="15">15Z</option><option value="18">18Z</option><option value="21">21Z</option>
+      </select>
+      <button onclick="diniStep(-1)">-1h</button>
+      <select id="diniHour"></select>
+      <button onclick="diniStep(1)">+1h</button>
+      <button onclick="renderDINI()">Load</button>
+      <button onclick="toggleDiniLoop()" id="diniLoopBtn">▶ Loop</button>
+      <span class="info" id="diniInfo"></span>
+    </div>
+    <div class="grid-2" style="height:calc(100vh - 150px)" id="diniGrid"></div>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.view).classList.add('active');
+  });
+});
+
+function refreshLivePair(imgA, baseA, imgB, baseB, statusEl){
+  const t = Date.now();
+  imgA.src = `${baseA}?t=${t}`;
+  imgB.src = `${baseB}?t=${t}`;
+  statusEl.textContent = 'Last refreshed: ' + new Date().toLocaleTimeString();
+}
+
+const satIR = document.getElementById('satIR');
+const satWV = document.getElementById('satWV');
+const satStatus = document.getElementById('satStatus');
+const satScale = document.getElementById('satScale');
+const satScaleVal = document.getElementById('satScaleVal');
+function applySatScale(){
+  document.documentElement.style.setProperty('--sat-scale', satScale.value);
+  satScaleVal.textContent = satScale.value;
+}
+satScale.addEventListener('input', applySatScale);
+applySatScale();
+refreshLivePair(satIR,'https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif',satWV,'https://modeles20.meteociel.fr/satellite/animsatwvmtguk.gif',satStatus);
+
+const radarImg = document.getElementById('radarImg');
+const radarIR = document.getElementById('radarIR');
+const radarStatus = document.getElementById('radarStatus');
+const radarScale = document.getElementById('radarScale');
+const radarScaleVal = document.getElementById('radarScaleVal');
+function applyRadarScale(){
+  radarScaleVal.textContent = radarScale.value;
+  document.querySelectorAll('#radarir .tuned-scale').forEach(el => el.style.transform = `scale(${radarScale.value})`);
+}
+radarScale.addEventListener('input', applyRadarScale);
+applyRadarScale();
+refreshLivePair(radarImg,'https://www.meteociel.com/cartes_obs/radar/lastradar_uk.gif',radarIR,'https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif',radarStatus);
+
+setInterval(()=>{
+  refreshLivePair(satIR,'https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif',satWV,'https://modeles20.meteociel.fr/satellite/animsatwvmtguk.gif',satStatus);
+  refreshLivePair(radarImg,'https://www.meteociel.com/cartes_obs/radar/lastradar_uk.gif',radarIR,'https://modeles20.meteociel.fr/satellite/animsatirmtguk.gif',radarStatus);
+}, 15*60*1000);
+
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtDate(d){ return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+function compactDate(d){ return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`; }
+function initDateTime(dateStr, run){ const [y,m,d] = dateStr.split('-').map(Number); return new Date(Date.UTC(y,m-1,d,Number(run))); }
+
+const ecCharts = [
+  {title:'PV 400', base:'ecm0125_nat_gh400_pv400', ext:'png', start:0},
+  {title:'Jet 300', base:'ecm0125_nat_gh300_uv300', ext:'png', start:0},
+  {title:'Z500', base:'ecm0125_nat_gh500_gh500-1000', ext:'png', start:0},
+  {title:'MSLP + T850 + Precip', base:'ecm0125_nat_msl_t850_6urk', ext:'jpg', start:6}
+];
+const ecDate = document.getElementById('ecDate');
+const ecRun = document.getElementById('ecRun');
+const ecHour = document.getElementById('ecHour');
+const ecGrid = document.getElementById('ecGrid');
+const ecInfo = document.getElementById('ecInfo');
+const ecLoopBtn = document.getElementById('ecLoopBtn');
+let ecLoop = null;
+for(let h=0; h<=240; h+=6){ const o=document.createElement('option'); o.value=h; o.textContent='+'+String(h).padStart(3,'0')+'h'; ecHour.appendChild(o); }
+function ecUrl(dateStr, run, chart, fh){
+  const [y,m,d] = dateStr.split('-');
+  const compact = dateStr.replaceAll('-', '') + run;
+  const hour = Math.max(chart.start, fh);
+  return `https://spakort.vedur.is/kort/ecm0125/${y}/${m}/${d}/${run}/${chart.base}_${compact}_${String(hour).padStart(3,'0')}.${chart.ext}`;
+}
+function ecStep(delta){ let n=Number(ecHour.value)+delta; if(n<0)n=0; if(n>240)n=240; ecHour.value=n; renderECMWF(); }
+function renderECMWF(){
+  const dateStr=ecDate.value, run=ecRun.value, fh=Number(ecHour.value);
+  ecInfo.textContent=`Run ${dateStr} ${run}Z · Forecast +${String(fh).padStart(3,'0')}h`;
+  ecGrid.innerHTML='';
+  ecCharts.forEach(chart=>{
+    const url=ecUrl(dateStr, run, chart, fh);
+    const panel=document.createElement('div');
+    panel.className='panel';
+    panel.innerHTML=`<div class="panel-head"><span>${chart.title} · +${String(Math.max(chart.start,fh)).padStart(3,'0')}h</span><a href="${url}" target="_blank">↗</a></div><div class="frame-wrap"><img src="${url}"></div>`;
+    ecGrid.appendChild(panel);
+  });
+}
+function toggleECLoop(){
+  if(ecLoop){ clearInterval(ecLoop); ecLoop=null; ecLoopBtn.textContent='▶ Loop'; }
+  else { ecLoop=setInterval(()=>{ let n=Number(ecHour.value)+6; if(n>240)n=0; ecHour.value=n; renderECMWF(); },700); ecLoopBtn.textContent='⏸ Stop'; }
+}
+ecDate.value='2026-03-25'; ecRun.value='00'; ecHour.value='0'; renderECMWF();
+
+const cmpDate = document.getElementById('cmpDate');
+const cmpRun = document.getElementById('cmpRun');
+const cmpHour = document.getElementById('cmpHour');
+const cmpGrid = document.getElementById('cmpGrid');
+const cmpInfo = document.getElementById('cmpInfo');
+for(let h=0; h<=240; h+=6){ const o=document.createElement('option'); o.value=h; o.textContent='+'+String(h).padStart(3,'0')+'h'; cmpHour.appendChild(o); }
+function cmpStep(delta){ let n=Number(cmpHour.value)+delta; if(n<0)n=0; if(n>240)n=240; cmpHour.value=n; renderCompare(); }
+function cmpBuildUrl(initDt, fh){
+  const y=initDt.getUTCFullYear(), m=pad(initDt.getUTCMonth()+1), d=pad(initDt.getUTCDate()), run=pad(initDt.getUTCHours());
+  const compact=compactDate(initDt)+run;
+  return `https://spakort.vedur.is/kort/ecm0125/${y}/${m}/${d}/${run}/ecm0125_nat_gh400_pv400_${compact}_${String(fh).padStart(3,'0')}.png`;
+}
+function renderCompare(){
+  const baseInit=initDateTime(cmpDate.value, cmpRun.value);
+  const baseFh=Number(cmpHour.value);
+  const validDt=new Date(baseInit.getTime()+baseFh*3600000);
+  cmpInfo.textContent=`Base run ${fmtDate(baseInit)} ${pad(baseInit.getUTCHours())}Z · Valid ${fmtDate(validDt)} ${pad(validDt.getUTCHours())}Z`;
+  const runs=[
+    {label:'Now', init:baseInit},
+    {label:'T-12', init:new Date(baseInit.getTime()-12*3600000)},
+    {label:'T-24', init:new Date(baseInit.getTime()-24*3600000)},
+    {label:'T-36', init:new Date(baseInit.getTime()-36*3600000)}
+  ];
+  cmpGrid.innerHTML='';
+  runs.forEach(r=>{
+    const fh=Math.round((validDt-r.init)/3600000);
+    const panel=document.createElement('div'); panel.className='panel';
+    if(fh<0 || fh>240 || fh%6!==0){
+      panel.innerHTML=`<div class="panel-head"><span>${r.label} · ${fmtDate(r.init)} ${pad(r.init.getUTCHours())}Z</span><span>invalid</span></div><div class="frame-wrap"><div class="bad">No matching 6-hour frame for this valid time.</div></div>`;
+    } else {
+      const url=cmpBuildUrl(r.init, fh);
+      panel.innerHTML=`<div class="panel-head"><span>${r.label} · ${fmtDate(r.init)} ${pad(r.init.getUTCHours())}Z · +${String(fh).padStart(3,'0')}h</span><a href="${url}" target="_blank">↗</a></div><div class="frame-wrap"><img src="${url}"></div>`;
+    }
+    cmpGrid.appendChild(panel);
+  });
+}
+cmpDate.value='2026-03-25'; cmpRun.value='00'; cmpHour.value='60'; renderCompare();
+
+const diniCharts = [
+  {title:'DINI MSLP + T850 + wind + precip', base:'uwc-dini_dini_mslp_t850_10uv_tp1h', ext:'jpg'},
+  {title:'DINI accumulated precip + wind', base:'uwc-dini_nweur_accum_tp_10uv', ext:'jpg'}
+];
+const diniDate = document.getElementById('diniDate');
+const diniRun = document.getElementById('diniRun');
+const diniHour = document.getElementById('diniHour');
+const diniGrid = document.getElementById('diniGrid');
+const diniInfo = document.getElementById('diniInfo');
+const diniLoopBtn = document.getElementById('diniLoopBtn');
+let diniLoop = null;
+for(let h=0; h<=60; h++){ const o=document.createElement('option'); o.value=h; o.textContent='+'+String(h).padStart(3,'0')+'h'; diniHour.appendChild(o); }
+function diniUrl(dateStr, run, chart, fh){
+  const [y,m,d] = dateStr.split('-');
+  const compact = dateStr.replaceAll('-', '') + run;
+  return `https://spakort.vedur.is/kort/uwc-dini/${y}/${m}/${d}/${run}/${chart.base}_${compact}_${String(fh).padStart(2,'0')}.${chart.ext}`;
+}
+function diniStep(delta){ let n=Number(diniHour.value)+delta; if(n<0)n=0; if(n>60)n=60; diniHour.value=n; renderDINI(); }
+function renderDINI(){
+  const dateStr=diniDate.value, run=diniRun.value, fh=Number(diniHour.value);
+  diniInfo.textContent=`Run ${dateStr} ${run}Z · Forecast +${String(fh).padStart(3,'0')}h`;
+  diniGrid.innerHTML='';
+  diniCharts.forEach(chart=>{
+    const url=diniUrl(dateStr, run, chart, fh);
+    const panel=document.createElement('div'); panel.className='panel';
+    panel.innerHTML=`<div class="panel-head"><span>${chart.title} · +${String(fh).padStart(3,'0')}h</span><a href="${url}" target="_blank">↗</a></div><div class="frame-wrap"><img src="${url}"></div>`;
+    diniGrid.appendChild(panel);
+  });
+}
+function toggleDiniLoop(){
+  if(diniLoop){ clearInterval(diniLoop); diniLoop=null; diniLoopBtn.textContent='▶ Loop'; }
+  else { diniLoop=setInterval(()=>{ let n=Number(diniHour.value)+1; if(n>60)n=0; diniHour.value=n; renderDINI(); },700); diniLoopBtn.textContent='⏸ Stop'; }
+}
+diniDate.value='2026-03-25'; diniRun.value='09'; diniHour.value='0'; renderDINI();
+</script>
+</body>
+</html>
